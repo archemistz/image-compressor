@@ -4,9 +4,29 @@ import sharp from 'sharp';
 import fs from 'fs';
 import { ssim } from 'ssim.js';
 import pLimit from 'p-limit';
+import rateLimit from 'express-rate-limit';
 
 const app = express();
 const upload = multer({ dest: 'uploads/', limits: { files: 50 } });
+// A single secret key for now — anyone calling the API must send this
+// In real use you'd store this somewhere safer than plain code, but this works for v1
+const API_KEY = process.env.API_KEY || 'dev-test-key-12345';
+
+// Limits each caller to 20 requests per minute
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  message: { error: 'Too many requests, slow down.' },
+});
+
+// Middleware: checks for a valid API key before letting a request through
+function requireApiKey(req, res, next) {
+  const providedKey = req.headers['x-api-key'];
+  if (providedKey !== API_KEY) {
+    return res.status(401).json({ error: 'Invalid or missing API key' });
+  }
+  next();
+}
 
 // Converts an image buffer into raw RGBA pixel data — this is what ssim.js needs to compare images
 async function getRawImageData(buffer) {
@@ -391,6 +411,58 @@ const width = parseInt(req.body.width) || null;
   } catch (err) {
     console.error(err);
     res.status(500).send('Something went wrong compressing those images.');
+  }
+});
+// JSON API endpoint — same compression logic, returns data instead of an HTML page
+app.post('/api/compress', apiLimiter, requireApiKey, upload.array('images', 50), async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'No images uploaded. Send files under the "images" field.' });
+    }
+
+    const width = parseInt(req.body.width) || null;
+    const height = parseInt(req.body.height) || null;
+    const resizeOpts = (width || height) ? { width, height } : null;
+
+    const mimeTypes = { jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+    const limit = pLimit(3);
+
+    const compressOne = async (file) => {
+      const { buffer, quality, similarity, format } = await compressWithSSIM(file.path, 0.985, resizeOpts);
+      const originalSize = fs.statSync(file.path).size;
+      fs.unlinkSync(file.path);
+
+      return {
+        name: file.originalname,
+        format,
+        quality,
+        similarity: Number(similarity.toFixed(4)),
+        originalSize,
+        compressedSize: buffer.length,
+        savedPercent: Math.round((1 - buffer.length / originalSize) * 100),
+        mime: mimeTypes[format] || 'image/jpeg',
+        data: buffer.toString('base64'),
+      };
+    };
+
+    const results = await Promise.all(
+      req.files.map((file) => limit(() => compressOne(file)))
+    );
+
+    const totalOriginal = results.reduce((sum, r) => sum + r.originalSize, 0);
+    const totalCompressed = results.reduce((sum, r) => sum + r.compressedSize, 0);
+
+    res.json({
+      success: true,
+      count: results.length,
+      totalOriginalSize: totalOriginal,
+      totalCompressedSize: totalCompressed,
+      totalSavedPercent: Math.round((1 - totalCompressed / totalOriginal) * 100),
+      results,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong compressing those images.' });
   }
 });
 const PORT = process.env.PORT || 3000;
