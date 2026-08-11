@@ -1,3 +1,6 @@
 node_modules/
 uploads/
 .DS_Store
+input.heic
+input.jpg
+output.jpg
