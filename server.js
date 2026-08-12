@@ -57,7 +57,7 @@ initDb().catch((err) => console.error('Database setup failed:', err));
 const FREE_MAX_SIZE = 10 * 1024 * 1024; // 10MB
 const PRO_MAX_SIZE = 200 * 1024 * 1024; // 200MB
 
-const upload = multer({ dest: 'uploads/', limits: { files: 50, fileSize: PRO_MAX_SIZE } });
+const upload = multer({ dest: 'uploads/', limits: { files: 100, fileSize: PRO_MAX_SIZE } });
 // A single secret key for now — anyone calling the API must send this
 // In real use you'd store this somewhere safer than plain code, but this works for v1
 const API_KEY = process.env.API_KEY || 'dev-test-key-12345';
@@ -346,7 +346,7 @@ app.get('/', (req, res) => {
             <div style="width:34px; height:34px; border:1.5px solid var(--line); border-radius:4px; background:var(--card); transform:rotate(6deg);"></div>
           </div>
          <p style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--ink); margin:0 0 6px; font-weight:500;">Drop multiple images here</p>
-          <p style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--dim); margin:0 0 14px;">or click to browse — JPEG, PNG, WebP, HEIC</p>
+          <p style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--dim); margin:0 0 14px;">or click to browse — JPEG, PNG, WebP</p>
           <input type="file" name="images" accept="image/*,.heic,.heif" multiple required style="display:none;" />
         </div>
         <div style="margin:16px 0; text-align:left;">
@@ -676,7 +676,7 @@ app.get('/pricing', (req, res) => {
       <p class="plan-name">Pro</p>
       <p class="plan-price">$3 / month</p>
       <ul>
-        <li>Batch upload (up to 50 images)</li>
+        <li>Batch upload (up to 100 images)</li>
         <li>API access with your own key</li>
         <li>Priority processing</li>
       </ul>
@@ -742,7 +742,7 @@ app.post('/contact', async (req, res) => {
   `, req.session.userEmail));
 });
 // This runs when someone submits the form above
-app.post('/compress', upload.array('images', 50), async (req, res) => {
+app.post('/compress', upload.array('images', 100), async (req, res) => {
   try {
     // Check whether this visitor is a Pro subscriber
     let isPro = false;
@@ -781,7 +781,7 @@ app.post('/compress', upload.array('images', 50), async (req, res) => {
     const results = [];
 
 // Process up to 3 images at once instead of one at a time — real speedup on multi-core machines
-    const limit = pLimit(3);
+    const limit = pLimit(5);
 
     const compressOne = async (file) => {
       const { buffer, quality, similarity, format } = await compressWithSSIM(file.path, 0.985, resizeOpts);
@@ -846,7 +846,7 @@ app.post('/compress', upload.array('images', 50), async (req, res) => {
   }
 });
 // JSON API endpoint — same compression logic, returns data instead of an HTML page
-app.post('/api/compress', apiLimiter, requireApiKey, upload.array('images', 50), async (req, res) => {
+app.post('/api/compress', apiLimiter, requireApiKey, upload.array('images', 100), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: 'No images uploaded. Send files under the "images" field.' });
@@ -857,7 +857,7 @@ app.post('/api/compress', apiLimiter, requireApiKey, upload.array('images', 50),
     const resizeOpts = (width || height) ? { width, height } : null;
 
     const mimeTypes = { jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
-    const limit = pLimit(3);
+    const limit = pLimit(5);
 
     const compressOne = async (file) => {
       const { buffer, quality, similarity, format } = await compressWithSSIM(file.path, 0.985, resizeOpts);
