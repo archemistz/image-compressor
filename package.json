@@ -12,11 +12,20 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "bcrypt": "^6.0.0",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.2",
+    "express-session": "^1.19.0",
     "multer": "^2.2.0",
     "p-limit": "^7.3.1",
+    "pg": "^8.23.0",
+    "resend": "^6.19.0",
     "sharp": "^0.35.3",
-    "ssim.js": "^3.5.0"
+    "ssim.js": "^3.5.0",
+    "stripe": "^22.5.0"
+  },
+  "allowScripts": {
+    "bcrypt@6.0.0": true
   }
 }
