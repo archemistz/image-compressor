@@ -638,8 +638,11 @@ app.get('/account', requireLogin, async (req, res) => {
       </div>
       <div style="margin-top:20px;">
         <span class="stat-label">Your API key</span>
-        <div style="background:var(--page); border:1px solid var(--line); border-radius:3px; padding:12px; margin-top:8px; font-family:'IBM Plex Mono',monospace; font-size:12.5px; word-break:break-all;">${user.api_key}</div>
+	<div style="background:var(--page); border:1px solid var(--line); border-radius:3px; padding:12px; margin-top:8px; font-family:'IBM Plex Mono',monospace; font-size:12.5px; word-break:break-all;">${user.api_key}</div>
       </div>
+      <form action="/create-portal-session" method="post" style="margin-top:20px;">
+        <button type="submit">Manage subscription</button>
+      </form>
     `
     : `
       <div class="stat-row">
@@ -654,6 +657,27 @@ app.get('/account', requireLogin, async (req, res) => {
     <h1>${user.email}</h1>
     ${proSection}
   `, req.session.userEmail));
+});
+// Sends a logged-in Pro user to Stripe's hosted subscription management page
+app.post('/create-portal-session', requireLogin, async (req, res) => {
+  try {
+    const userResult = await db.query('SELECT stripe_customer_id FROM users WHERE id = $1', [req.session.userId]);
+    const user = userResult.rows[0];
+
+    if (!user.stripe_customer_id) {
+      return res.redirect('/pricing');
+    }
+
+    const portalSession = await stripe.billingPortal.sessions.create({
+      customer: user.stripe_customer_id,
+      return_url: `${req.protocol}://${req.get('host')}/account`,
+    });
+
+    res.redirect(portalSession.url);
+  } catch (err) {
+    console.error('Portal session error:', err);
+    res.status(500).send('Something went wrong opening your subscription settings.');
+  }
 });
 // Pricing page
 app.get('/pricing', (req, res) => {
