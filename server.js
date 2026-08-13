@@ -4,8 +4,7 @@ import sharp from 'sharp';
 import fs from 'fs';
 import { ssim } from 'ssim.js';
 import pLimit from 'p-limit';
-import * as archiverModule from 'archiver';
-const archiver = archiverModule.default || archiverModule;
+import { ZipArchive } from 'archiver';
 import rateLimit from 'express-rate-limit';
 import { config } from 'dotenv';
 config({ quiet: true });
@@ -295,7 +294,7 @@ const authLinks = userEmail
 // Builds a ZIP file in memory from an array of {name, buffer} objects
 function buildZipBuffer(files) {
   return new Promise((resolve, reject) => {
-    const archive = archiver('zip', { zlib: { level: 9 } });
+    const archive = new ZipArchive({ zlib: { level: 9 } });
     const chunks = [];
 
     archive.on('data', (chunk) => chunks.push(chunk));
