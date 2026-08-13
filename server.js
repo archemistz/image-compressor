@@ -129,7 +129,7 @@ async function encodeAtQuality(inputPath, format, quality) {
 }
 
 // Tries a list of quality levels for the DETECTED format, returns the first one that's visually similar enough
-function renderPage(title, bodyHtml, userEmail) {
+function renderPage(title, bodyHtml, userEmail, extraSection = '') {
 const authLinks = userEmail
     ? `<a href="/account">Account</a> <form action="/logout" method="post" style="display:inline;"><button type="submit" style="background:none;color:var(--safelight);padding:0;font-size:12px;text-transform:none;letter-spacing:0;">Log out</button></form>`
     : `<a href="/login">Log in</a> <a href="/signup">Sign up</a>`;
@@ -159,6 +159,7 @@ const authLinks = userEmail
     --line:#DDD2B8; --dim:#8D8271;
   }
   *{box-sizing:border-box;}
+  html{ scroll-behavior:smooth; }
   body{
     margin:0; background:var(--page); color:var(--ink);
     font-family:'Inter',sans-serif; min-height:100vh;
@@ -279,12 +280,13 @@ const authLinks = userEmail
 	</header>
     <div style="text-align:center; margin-bottom:28px;">
       <div style="background:var(--fixer-tint); color:var(--fixer); font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; text-align:center; padding:8px 16px; border-radius:20px; display:inline-block; margin-bottom:14px;">🎉 First 100 users get free batch upload — sign up now</div><br>
-      <h2 style="font-family:'Instrument Serif',serif; font-weight:400; font-size:32px; color:var(--ink); margin:0 0 6px; line-height:1.15;">Fast and easy compression.</h2>
+	<h2 style="font-family:'Instrument Serif',serif; font-weight:400; font-size:32px; color:var(--ink); margin:0 0 6px; line-height:1.15;">Make your images smaller.<br>Without making them look worse.</h2>
       <p style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--safelight); margin:0;">API included in Pro</p>
     </div>
     <div class="card">${bodyHtml}</div>
     <p style="text-align:center; font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--dim); margin-top:24px;">Built by a solo developer — be nice 🙂</p>
-  </div>
+    ${extraSection} 
+ </div>
 </body>
 </html>`;
 }
@@ -344,17 +346,19 @@ async function compressWithSSIM(inputPath, targetSimilarity = 0.985, resizeOpts 
 // Homepage — shows a simple upload form
 app.get('/', (req, res) => {
   res.send(renderPage('Image Compressor', `
+    <button type="button" id="trustToggle" style="position:absolute; top:20px; right:20px; background:var(--page); border:1px solid var(--line); color:var(--ink); font-family:'IBM Plex Mono',monospace; font-size:10.5px; font-weight:700; padding:6px 12px; border-radius:20px; cursor:pointer; text-transform:none; letter-spacing:0;">🔒 Privacy</button>
+    <div id="trustPanel" style="display:none; background:var(--page); border:1px solid var(--line); border-radius:3px; padding:14px; margin-bottom:20px; font-family:'Inter',sans-serif; font-size:12.5px; font-weight:600; color:var(--ink); line-height:1.6;">Your images are processed and never stored — they're deleted immediately after compression. Location and camera metadata (EXIF) is automatically stripped from every file.</div>
     <h1>Image Compressor</h1>
     <p class="lead">Drop in a JPEG, PNG, or WebP — it'll find the smallest file size that still looks right, automatically.</p>
     <form action="/compress" method="post" enctype="multipart/form-data">
       <div class="dropzone">
-       <div id="dropArea" style="cursor:pointer;">
+        <div id="dropArea" style="cursor:pointer;">
           <div style="display:flex; justify-content:center; gap:6px; margin-bottom:14px;">
             <div style="width:34px; height:34px; border:1.5px solid var(--line); border-radius:4px; background:var(--card); transform:rotate(-6deg);"></div>
             <div style="width:34px; height:34px; border:1.5px solid var(--safelight); border-radius:4px; background:var(--card);"></div>
             <div style="width:34px; height:34px; border:1.5px solid var(--line); border-radius:4px; background:var(--card); transform:rotate(6deg);"></div>
           </div>
-         <p style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--ink); margin:0 0 6px; font-weight:500;">Drop multiple images here</p>
+          <p style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--ink); margin:0 0 6px; font-weight:500;">Drop multiple images here</p>
           <p style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--dim); margin:0 0 14px;">or click to browse — JPEG, PNG, WebP</p>
           <input type="file" name="images" accept="image/*,.heic,.heif" multiple required style="display:none;" />
         </div>
@@ -382,6 +386,7 @@ app.get('/', (req, res) => {
         <input type="hidden" name="width" id="hiddenWidth" />
         <input type="hidden" name="height" id="hiddenHeight" />
         <button type="submit">Compress image</button>
+        <a href="#how-it-works" class="button-link" style="display:block; text-align:center; margin-top:14px; font-size:11.5px;">See how it works ↓</a>
       </div>
     </form>
     <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
@@ -429,9 +434,14 @@ app.get('/', (req, res) => {
         }
       });
     </script>
-	<script>
-      const dropArea = document.getElementById('dropArea');
+    <script>
+      const trustToggle = document.getElementById('trustToggle');
+      const trustPanel = document.getElementById('trustPanel');
+      trustToggle.addEventListener('click', () => {
+        trustPanel.style.display = trustPanel.style.display === 'none' ? 'block' : 'none';
+      });
 
+      const dropArea = document.getElementById('dropArea');
       const realFileInput = document.querySelector('input[type=file]');
 
       dropArea.addEventListener('click', () => realFileInput.click());
@@ -451,7 +461,6 @@ app.get('/', (req, res) => {
         realFileInput.files = e.dataTransfer.files;
         realFileInput.dispatchEvent(new Event('change'));
       });
-    
 
       const fileInputForDims = document.querySelector('input[type=file]');
       const originalDimsEl = document.getElementById('originalDims');
@@ -465,7 +474,7 @@ app.get('/', (req, res) => {
         if (!file) return;
         const img = new Image();
         img.onload = function () {
-          originalDimsEl.textContent = 'Original: ' + img.naturalWidth + ' × ' + img.naturalHeight + 'px';
+          originalDimsEl.textContent = 'Original: ' + img.naturalWidth + ' \u00d7 ' + img.naturalHeight + 'px';
           originalDimsEl.style.display = 'block';
         };
         img.src = URL.createObjectURL(file);
@@ -496,7 +505,50 @@ app.get('/', (req, res) => {
         hiddenHeight.value = customSizeInput.value;
       });
     </script>
-  `, req.session.userEmail));
+  `, req.session.userEmail, `
+    <div style="margin-top:32px; padding-top:24px; border-top:1px solid var(--line);">
+      <p class="eyebrow" style="text-align:center;">See it in action</p>
+      <h2 style="font-family:'Instrument Serif',serif; font-weight:400; font-size:26px; color:var(--ink); text-align:center; margin:0 0 20px;">11.62 MB → 3.45 MB</h2>
+      <div style="display:flex; gap:12px; margin-bottom:12px;">
+        <div style="flex:1;">
+          <img src="/demo-before.jpg" alt="Original" style="width:100%; border-radius:3px; border:1px solid var(--line); display:block;" />
+          <p style="text-align:center; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--dim); margin:6px 0 0;">Before — 11.62 MB</p>
+        </div>
+        <div style="flex:1;">
+          <img src="/demo-after.jpg" alt="Compressed" style="width:100%; border-radius:3px; border:1px solid var(--line); display:block;" />
+          <p style="text-align:center; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--fixer); font-weight:600; margin:6px 0 0;">After — 3.45 MB</p>
+        </div>
+      </div>
+      <p style="text-align:center; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--dim);">70% smaller, visually near-identical — no manual settings.</p>
+    </div>
+    
+
+      <div id="how-it-works" style="margin-top:32px; padding-top:24px; border-top:1px solid var(--line);">
+      <p class="eyebrow" style="text-align:center;">How it works</p>
+      <h2 style="font-family:'Instrument Serif',serif; font-weight:400; font-size:26px; color:var(--ink); text-align:center; margin:0 0 24px;">Three steps</h2>
+      <div class="stat-row" style="align-items:flex-start; padding:16px 0;">
+        <span class="stat-label" style="width:24px; flex-shrink:0;">01</span>
+        <div>
+          <div style="font-weight:600; font-size:14px; margin-bottom:4px;">Upload your image</div>
+          <div style="font-size:12.5px; color:var(--dim); line-height:1.5;">Drag and drop, or click to browse. JPEG, PNG, and WebP are supported.</div>
+        </div>
+      </div>
+      <div class="stat-row" style="align-items:flex-start; padding:16px 0;">
+        <span class="stat-label" style="width:24px; flex-shrink:0;">02</span>
+        <div>
+          <div style="font-weight:600; font-size:14px; margin-bottom:4px;">We measure, not guess</div>
+          <div style="font-size:12.5px; color:var(--dim); line-height:1.5;">Instead of one fixed setting, we try several compression levels and measure the actual visual similarity to your original \u2014 stopping at the smallest file size that still looks right.</div>
+        </div>
+      </div>
+      <div class="stat-row" style="align-items:flex-start; padding:16px 0;">
+        <span class="stat-label" style="width:24px; flex-shrink:0;">03</span>
+        <div>
+          <div style="font-weight:600; font-size:14px; margin-bottom:4px;">Download the result</div>
+          <div style="font-size:12.5px; color:var(--dim); line-height:1.5;">See the before-and-after size, then download \u2014 your original is never stored.</div>
+        </div>
+      </div>
+    </div>
+  `));
 });
 // Signup page
 app.get('/signup', (req, res) => {
