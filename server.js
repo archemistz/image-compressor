@@ -270,6 +270,7 @@ const authLinks = userEmail
       </nav>
 	</header>
     <div style="text-align:center; margin-bottom:28px;">
+      <div style="background:var(--fixer-tint); color:var(--fixer); font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; text-align:center; padding:8px 16px; border-radius:20px; display:inline-block; margin-bottom:14px;">🎉 First 100 users get free batch upload — sign up now</div><br>
       <h2 style="font-family:'Instrument Serif',serif; font-weight:400; font-size:32px; color:var(--ink); margin:0 0 6px; line-height:1.15;">Fast and easy compression.</h2>
       <p style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--safelight); margin:0;">API included in Pro</p>
     </div>
@@ -768,15 +769,17 @@ app.post('/contact', async (req, res) => {
 // This runs when someone submits the form above
 app.post('/compress', upload.array('images', 100), async (req, res) => {
   try {
-    // Check whether this visitor is a Pro subscriber
+	// Check whether this visitor is a Pro subscriber, OR one of the first 100 users (free batch promo)
     let isPro = false;
+    let hasBatchAccess = false;
     if (req.session.userId) {
       const userResult = await db.query('SELECT is_pro FROM users WHERE id = $1', [req.session.userId]);
       isPro = userResult.rows[0]?.is_pro || false;
+      hasBatchAccess = isPro || req.session.userId <= 100;
     }
 
     // Free tier: single image only
-    if (!isPro && req.files.length > 1) {
+      if (!hasBatchAccess && req.files.length > 1) {
       req.files.forEach(f => fs.unlinkSync(f.path));
       return res.status(403).send(renderPage('Upgrade Required', `
         <h1>Batch upload is a Pro feature</h1>
