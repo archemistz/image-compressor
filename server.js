@@ -4,6 +4,7 @@ import sharp from 'sharp';
 import fs from 'fs';
 import { ssim } from 'ssim.js';
 import pLimit from 'p-limit';
+import archiver from 'archiver';
 import rateLimit from 'express-rate-limit';
 import { config } from 'dotenv';
 config({ quiet: true });
@@ -289,6 +290,23 @@ const authLinks = userEmail
  </div>
 </body>
 </html>`;
+}
+// Builds a ZIP file in memory from an array of {name, buffer} objects
+function buildZipBuffer(files) {
+  return new Promise((resolve, reject) => {
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    const chunks = [];
+
+    archive.on('data', (chunk) => chunks.push(chunk));
+    archive.on('end', () => resolve(Buffer.concat(chunks)));
+    archive.on('error', reject);
+
+    files.forEach((file) => {
+      archive.append(file.buffer, { name: file.name });
+    });
+
+    archive.finalize();
+  });
 }
 async function compressWithSSIM(inputPath, targetSimilarity = 0.985, resizeOpts = null) {
   const metadata = await sharp(inputPath).metadata();
@@ -891,12 +909,25 @@ app.post('/compress', upload.array('images', 100), async (req, res) => {
         base64: buffer.toString('base64'),
         mime: mimeTypes[format] || 'image/jpeg',
       };
-    };
+
+};
 
     const batchResults = await Promise.all(
       req.files.map((file) => limit(() => compressOne(file)))
     );
     results.push(...batchResults);
+
+// If more than one image, also build a ZIP of all compressed files
+    let zipBase64 = null;
+    if (results.length > 1) {
+      const zipFiles = results.map(r => ({
+        name: `compressed-${r.name}`,
+        buffer: Buffer.from(r.base64, 'base64'),
+      }));
+      const zipBuffer = await buildZipBuffer(zipFiles);
+      zipBase64 = zipBuffer.toString('base64');
+    }
+
     const totalOriginal = results.reduce((sum, r) => sum + r.originalSize, 0);
     const totalCompressed = results.reduce((sum, r) => sum + r.compressedSize, 0);
     const totalSavedPercent = Math.round((1 - totalCompressed / totalOriginal) * 100);
@@ -923,6 +954,7 @@ app.post('/compress', upload.array('images', 100), async (req, res) => {
     res.send(renderPage('Compressed', `
       <div class="savings-badge">${totalSavedPercent}% smaller overall</div>
       <h1>${results.length} image${results.length > 1 ? 's' : ''} compressed</h1>
+	${zipBase64 ? `<a class="button-link" href="data:application/zip;base64,${zipBase64}" download="compressed-images.zip">⬇ Download all as ZIP</a>` : ''}
       <p class="lead">${(totalOriginal / 1024).toFixed(0)} KB → ${(totalCompressed / 1024).toFixed(0)} KB total.</p>
       ${resultCards}
       <a class="button-link" href="/">← Compress more</a>
