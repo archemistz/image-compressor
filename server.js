@@ -286,7 +286,30 @@ const authLinks = userEmail
     </div>
     <div class="card">${bodyHtml}</div>
     <p style="text-align:center; font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--dim); margin-top:24px;">Built by a solo developer — be nice 🙂</p>
-    ${extraSection} 
+    ${!userEmail ? `
+    <div id="signupPopup" style="display:none; position:fixed; inset:0; background:rgba(28,23,18,0.5); z-index:100; align-items:center; justify-content:center; padding:20px;">
+      <div style="background:var(--card); border-radius:16px; padding:36px; max-width:380px; width:100%; position:relative; box-shadow:0 20px 60px rgba(0,0,0,0.25);">
+        <button type="button" id="closeSignupPopup" style="position:absolute; top:16px; right:16px; background:none; border:none; color:var(--dim); font-size:20px; cursor:pointer; padding:4px; line-height:1;">×</button>
+        <p class="eyebrow">Free account</p>
+        <h2 style="font-family:'Instrument Serif',serif; font-weight:400; font-size:24px; color:var(--ink); margin:0 0 10px;">Get more from SquashImage</h2>
+        <p style="font-size:13px; color:var(--dim); line-height:1.6; margin:0 0 20px;">Sign up free — and if you're one of the first 100, batch upload is free forever too.</p>
+        <a href="/signup" class="button-link" style="display:block; text-align:center; background:var(--safelight); color:#fff; padding:12px; border-radius:10px; text-decoration:none; font-weight:600; margin-top:0;">Sign up free</a>
+      </div>
+    </div>
+    <script>
+      (function() {
+        if (localStorage.getItem('signupPopupDismissed')) return;
+        setTimeout(function() {
+          document.getElementById('signupPopup').style.display = 'flex';
+        }, 4000);
+        document.getElementById('closeSignupPopup').addEventListener('click', function() {
+          document.getElementById('signupPopup').style.display = 'none';
+          localStorage.setItem('signupPopupDismissed', 'true');
+        });
+      })();
+    </script>
+  ` : ''}
+    ${extraSection}
  </div>
 </body>
 </html>`;
@@ -362,8 +385,27 @@ async function compressWithSSIM(inputPath, targetSimilarity = 0.985, resizeOpts 
   return result;}
 
 // Homepage — shows a simple upload form
-app.get('/', (req, res) => {
+ app.get('/', (req, res) => {
+  const showWelcome = req.query.welcome === '1';
   res.send(renderPage('Image Compressor', `
+    ${showWelcome ? `
+    <div id="welcomePopup" style="position:fixed; inset:0; background:rgba(28,23,18,0.5); z-index:100; display:flex; align-items:center; justify-content:center; padding:20px;">
+      <div style="background:var(--card); border-radius:16px; padding:36px; max-width:420px; width:100%; position:relative; box-shadow:0 20px 60px rgba(0,0,0,0.25);">
+        <button type="button" onclick="document.getElementById('welcomePopup').style.display='none';" style="position:absolute; top:16px; right:16px; background:none; border:none; color:var(--dim); font-size:20px; cursor:pointer; padding:4px; line-height:1;">×</button>
+        <p class="eyebrow">Welcome</p>
+        <h2 style="font-family:'Instrument Serif',serif; font-weight:400; font-size:24px; color:var(--ink); margin:0 0 16px;">Choose your plan</h2>
+        <div style="border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:10px;">
+          <div style="font-weight:600; font-size:14px;">Free</div>
+          <div style="font-size:12px; color:var(--dim); margin-top:2px;">Single image, up to 10MB</div>
+        </div>
+        <div style="border:1px solid var(--safelight); border-radius:10px; padding:14px; margin-bottom:16px;">
+          <div style="font-weight:600; font-size:14px; color:var(--safelight);">Pro — $3/mo</div>
+          <div style="font-size:12px; color:var(--dim); margin-top:2px;">Batch upload, API key, up to 200MB</div>
+        </div>
+        <a href="/pricing" class="button-link" style="display:block; text-align:center; background:var(--safelight); color:#fff; padding:12px; border-radius:10px; text-decoration:none; font-weight:600; margin-top:0;">See plans</a>
+      </div>
+    </div>
+  ` : ''}
     <button type="button" id="trustToggle" style="position:absolute; top:20px; right:20px; background:var(--page); border:1px solid var(--line); color:var(--ink); font-family:'IBM Plex Mono',monospace; font-size:10.5px; font-weight:700; padding:6px 12px; border-radius:20px; cursor:pointer; text-transform:none; letter-spacing:0;">🔒 Privacy</button>
     <div id="trustPanel" style="display:none; background:var(--page); border:1px solid var(--line); border-radius:3px; padding:14px; margin-bottom:20px; font-family:'Inter',sans-serif; font-size:12.5px; font-weight:600; color:var(--ink); line-height:1.6;">Your images are processed and never stored — they're deleted immediately after compression. Location and camera metadata (EXIF) is automatically stripped from every file.</div>
     <h1>Image Compressor</h1>
@@ -603,11 +645,13 @@ app.post('/signup', async (req, res) => {
       [email, passwordHash]
     );
 
-    // Log them in immediately after signup
+// Log them in immediately after signup
     req.session.userId = result.rows[0].id;
     req.session.userEmail = result.rows[0].email;
 
-    res.redirect('/');
+    res.redirect('/?welcome=1');
+
+
   } catch (err) {
     if (err.code === '23505') {
       // Postgres's error code for "unique constraint violated" — this email is already registered
